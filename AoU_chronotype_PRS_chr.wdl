@@ -89,11 +89,26 @@ task RunChromosomePRS {
         python3 <<PYTHON
 
 
+import os
+
 import hail as hl
 
 
 
 PROJECT = "wb-happy-almond-4027"
+
+
+
+# ============================================================
+# Spark memory configuration
+# ============================================================
+
+
+os.environ["PYSPARK_SUBMIT_ARGS"] = (
+    "--conf spark.driver.memory=100g "
+    "--conf spark.executor.memory=100g "
+    "pyspark-shell"
+)
 
 
 
@@ -139,22 +154,8 @@ mt = hl.read_matrix_table(
 
 
 
-print(
-    "Total variants:",
-    mt.count_rows()
-)
-
-
-
-print(
-    "Samples:",
-    mt.count_cols()
-)
-
-
-
 # ============================================================
-# Restrict to chromosome
+# Restrict to chromosome immediately
 # ============================================================
 
 
@@ -393,7 +394,7 @@ PYTHON
 
         memory: "~{mem} GB"
 
-        disks: "local-disk 500 SSD"
+        disks: "local-disk 1000 SSD"
 
     }
 
