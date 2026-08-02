@@ -5,7 +5,7 @@ workflow AoU_chronotype_PRS_chr {
 
     input {
 
-        File genetic_mt
+        String genetic_mt
 
         File prs_file
 
@@ -59,7 +59,7 @@ task RunChromosomePRS {
 
     input {
 
-        File genetic_mt
+        String genetic_mt
 
         File prs_file
 
@@ -87,8 +87,9 @@ task RunChromosomePRS {
         echo "=============================="
 
 
-        echo "Files:"
+        echo "Local files:"
         ls -lh
+
 
 
         python3 <<PYTHON
@@ -101,7 +102,8 @@ print("Starting Hail")
 
 
 hl.init(
-    app_name="AoU_PRs_chr~{chromosome}"
+    app_name="AoU_PRs_chr~{chromosome}",
+    tmp_dir="/tmp/hail"
 )
 
 
@@ -112,7 +114,7 @@ print(
 
 
 
-print("Loading WGS MT")
+print("Loading AoU WGS MatrixTable")
 
 
 mt = hl.read_matrix_table(
@@ -121,20 +123,25 @@ mt = hl.read_matrix_table(
 
 
 print(
-    "Total variants:",
+    "Total WGS variants:",
     mt.count_rows()
 )
 
 
 
-print("Loading PRS")
+print("Loading PRS file")
 
 
 prs = hl.import_table(
+
     "~{prs_file}",
+
     delimiter=",",
+
     force_bgz=True,
+
     impute=True
+
 )
 
 
@@ -146,7 +153,7 @@ print(
 
 
 
-print("Formatting PRS variants")
+print("Creating PRS keys")
 
 
 prs = prs.annotate(
@@ -154,22 +161,27 @@ prs = prs.annotate(
     locus = hl.locus(
 
         hl.format(
+
             "chr%s",
+
             prs.chr
+
         ),
 
         prs.bp,
 
         reference_genome="GRCh38"
-    ),
 
+    ),
 
     alleles = [
 
         prs.noneffect_allele,
 
         prs.effect_allele
+
     ]
+
 )
 
 
@@ -191,21 +203,29 @@ mt_chr = mt.filter_rows(
 
     mt.locus.contig ==
 
-    "chr~{chromosome}"
+    hl.format(
+
+        "chr%s",
+
+        "~{chromosome}"
+
+    )
 
 )
 
 
 
 print(
+
     "Chromosome variants:",
+
     mt_chr.count_rows()
+
 )
 
 
 
 print("Matching PRS variants")
-
 
 
 mt_prs = mt_chr.filter_rows(
@@ -230,8 +250,7 @@ print(
 
 
 
-print("Annotating weights")
-
+print("Adding PRS weights")
 
 
 mt_prs = mt_prs.annotate_rows(
@@ -247,7 +266,6 @@ mt_prs = mt_prs.annotate_rows(
 print("Exporting PLINK")
 
 
-
 hl.export_plink(
 
     mt_prs,
@@ -258,8 +276,7 @@ hl.export_plink(
 
 
 
-print("DONE")
-
+print("Finished chromosome ~{chromosome}")
 
 
 PYTHON
