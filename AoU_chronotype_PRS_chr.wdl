@@ -23,21 +23,22 @@ workflow AoU_chronotype_PRS_chr {
 
     call RunChromosomePRS {
 
-        input:
+        input {
 
-            genetic_mt = genetic_mt,
+            genetic_mt = genetic_mt
 
-            prs_file = prs_file,
+            prs_file = prs_file
 
-            chromosome = chromosome,
+            chromosome = chromosome
 
-            output_prefix = output_prefix,
+            output_prefix = output_prefix
 
-            cpu = cpu,
+            cpu = cpu
 
-            mem = mem,
+            mem = mem
 
             threads = threads
+        }
     }
 
 
@@ -81,13 +82,13 @@ task RunChromosomePRS {
         set -euo pipefail
 
 
-        echo "=============================="
-        echo "AoU Chromosome PRS"
+        echo "===================================="
+        echo "AoU Chronotype PRS chromosome run"
         echo "Chromosome: ~{chromosome}"
-        echo "=============================="
+        echo "===================================="
 
 
-        echo "Local files:"
+        echo "Files:"
         ls -lh
 
 
@@ -98,13 +99,27 @@ task RunChromosomePRS {
 import hail as hl
 
 
-print("Starting Hail")
+
+# ============================================================
+# Start Hail with AoU requester pays
+# ============================================================
+
+
+PROJECT = "wb-happy-almond-4027"
 
 
 hl.init(
-    app_name="AoU_PRs_chr~{chromosome}",
-    tmp_dir="/tmp/hail"
+
+    app_name="AoU_chronotype_PRS_chr~{chromosome}",
+
+    backend="spark",
+
+    tmp_dir=f"gs://dataproc-temp-{PROJECT}/hail_tmp",
+
+    gcs_requester_pays_configuration=PROJECT
+
 )
+
 
 
 print(
@@ -112,6 +127,11 @@ print(
     hl.version()
 )
 
+
+
+# ============================================================
+# Load AoU WGS
+# ============================================================
 
 
 print("Loading AoU WGS MatrixTable")
@@ -122,11 +142,58 @@ mt = hl.read_matrix_table(
 )
 
 
+
 print(
-    "Total WGS variants:",
+    "Total variants:",
     mt.count_rows()
 )
 
+
+
+print(
+    "Samples:",
+    mt.count_cols()
+)
+
+
+
+# ============================================================
+# Filter chromosome first
+# ============================================================
+
+
+print(
+    "Filtering chromosome ~{chromosome}"
+)
+
+
+
+mt_chr = mt.filter_rows(
+
+    mt.locus.contig ==
+
+    hl.format(
+
+        "chr%s",
+
+        "~{chromosome}"
+
+    )
+
+)
+
+
+
+print(
+    "Chromosome variants:",
+    mt_chr.count_rows()
+)
+
+
+
+# ============================================================
+# Import PRS weights
+# ============================================================
 
 
 print("Loading PRS file")
@@ -147,10 +214,15 @@ prs = hl.import_table(
 
 
 print(
-    "PRS variants:",
+    "PRS rows:",
     prs.count()
 )
 
+
+
+# ============================================================
+# Convert PRS variants to Hail keys
+# ============================================================
 
 
 print("Creating PRS keys")
@@ -186,6 +258,22 @@ prs = prs.annotate(
 
 
 
+prs = prs.select(
+
+    "locus",
+
+    "alleles",
+
+    "rs_number",
+
+    "weight",
+
+    "effect_allele"
+
+)
+
+
+
 prs = prs.key_by(
 
     "locus",
@@ -196,36 +284,20 @@ prs = prs.key_by(
 
 
 
-print("Filtering chromosome")
-
-
-mt_chr = mt.filter_rows(
-
-    mt.locus.contig ==
-
-    hl.format(
-
-        "chr%s",
-
-        "~{chromosome}"
-
-    )
-
-)
-
-
-
 print(
-
-    "Chromosome variants:",
-
-    mt_chr.count_rows()
-
+    "PRS variants:",
+    prs.count()
 )
 
 
 
-print("Matching PRS variants")
+# ============================================================
+# Match WGS to PRS variants
+# ============================================================
+
+
+print("Matching variants")
+
 
 
 mt_prs = mt_chr.filter_rows(
@@ -241,29 +313,43 @@ mt_prs = mt_chr.filter_rows(
 
 
 print(
-
     "Matched variants:",
-
     mt_prs.count_rows()
-
 )
 
 
 
-print("Adding PRS weights")
+# ============================================================
+# Add PRS annotation
+# ============================================================
+
+
+print("Annotating PRS weights")
+
 
 
 mt_prs = mt_prs.annotate_rows(
 
     prs_weight =
 
-        prs[mt_prs.row_key].weight
+        prs[mt_prs.row_key].weight,
+
+
+    prs_snp =
+
+        prs[mt_prs.row_key].rs_number
 
 )
 
 
 
+# ============================================================
+# Export chromosome PLINK
+# ============================================================
+
+
 print("Exporting PLINK")
+
 
 
 hl.export_plink(
@@ -276,14 +362,15 @@ hl.export_plink(
 
 
 
-print("Finished chromosome ~{chromosome}")
+print(
+    "Finished chromosome ~{chromosome}"
+)
 
 
 PYTHON
 
 
     >>>
-
 
 
     output {
@@ -302,7 +389,7 @@ PYTHON
 
         docker: "hailgenetics/hail:0.2.135"
 
-        cpu: "~{cpu}"
+        cpu: cpu
 
         memory: "~{mem} GB"
 
