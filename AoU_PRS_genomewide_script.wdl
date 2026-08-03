@@ -13,24 +13,26 @@ workflow AoU_chronotype_PRS_genomewide {
 
         Int cpu = 16
 
-        Int mem = 160
+        Int memory_gb = 160
 
     }
 
 
     call CalculatePRS {
 
-        input:
+        input {
 
-            genetic_mt = genetic_mt,
+            genetic_mt = genetic_mt
 
-            prs_file = prs_file,
+            prs_file = prs_file
 
-            output_prefix = output_prefix,
+            output_prefix = output_prefix
 
-            cpu = cpu,
+            cpu = cpu
 
-            mem = mem
+            memory_gb = memory_gb
+
+        }
 
     }
 
@@ -58,17 +60,17 @@ task CalculatePRS {
 
         Int cpu
 
-        Int mem
+        Int memory_gb
 
     }
 
 
-    command <<<'PYTHON'
+    command <<>
 
-set -euo pipefail
+    set -euo pipefail
 
 
-python3 <<PYTHON
+    python3 <<PYTHON
 
 
 import hail as hl
@@ -86,11 +88,11 @@ PROJECT = "wb-happy-almond-4027"
 
 hl.init(
 
-    app_name="AoU_chronotype_genomewide_PRS",
+    app_name="AoU_chronotype_PRS_genomewide",
 
     backend="spark",
 
-    tmp_dir=f"gs://dataproc-temp-{PROJECT}/hail_tmp",
+    tmp_dir="gs://dataproc-temp-wb-happy-almond-4027/hail_tmp",
 
     gcs_requester_pays_configuration=PROJECT
 
@@ -103,11 +105,11 @@ print("Hail version:", hl.version())
 
 
 ############################################################
-# Load AoU WGS MatrixTable
+# Load AoU MatrixTable
 ############################################################
 
 
-print("Loading AoU MatrixTable")
+print("Loading AoU WGS")
 
 
 
@@ -119,20 +121,17 @@ mt = hl.read_matrix_table(
 
 
 
-print("Total variants:")
-
+print("Variants:")
 print(mt.count_rows())
 
 
-
-print("Total samples:")
-
+print("Samples:")
 print(mt.count_cols())
 
 
 
 ############################################################
-# Variant QC for allele frequency fallback
+# Variant QC
 ############################################################
 
 
@@ -145,11 +144,11 @@ mt = hl.variant_qc(mt)
 
 
 ############################################################
-# Import PRS weights
+# Load PRS weights
 ############################################################
 
 
-print("Loading PRS weights")
+print("Loading PRS")
 
 
 
@@ -167,8 +166,7 @@ prs = hl.import_table(
 
 
 
-print("PRS variants:")
-
+print("PRS rows:")
 print(prs.count())
 
 
@@ -176,10 +174,6 @@ print(prs.count())
 ############################################################
 # Create PRS keys
 ############################################################
-
-
-print("Creating PRS locus keys")
-
 
 
 prs = prs.annotate(
@@ -219,9 +213,9 @@ prs = prs.select(
 
     "alleles",
 
-    "weight",
+    "effect_allele",
 
-    "effect_allele"
+    "weight"
 
 )
 
@@ -237,18 +231,12 @@ prs = prs.key_by(
 
 
 
-print("PRS keyed variants:")
-
-print(prs.count())
-
-
-
 ############################################################
-# Keep only PRS variants
+# Match variants
 ############################################################
 
 
-print("Matching AoU variants")
+print("Filtering variants")
 
 
 
@@ -264,42 +252,29 @@ mt = mt.filter_rows(
 
 
 
-matched = mt.count_rows()
-
-
-print("Matched variants:")
-
-print(matched)
+print("Matched:")
+print(mt.count_rows())
 
 
 
 ############################################################
-# Add PRS annotations
+# Add PRS information
 ############################################################
 
 
 mt = mt.annotate_rows(
 
-    prs_weight =
+    prs_weight = prs[mt.row_key].weight,
 
-        prs[mt.row_key].weight,
-
-
-    prs_effect_allele =
-
-        prs[mt.row_key].effect_allele
+    prs_effect_allele = prs[mt.row_key].effect_allele
 
 )
 
 
 
 ############################################################
-# Determine allele orientation
+# Allele orientation
 ############################################################
-
-
-print("Determining allele orientation")
-
 
 
 flip = hl.case() \
@@ -332,12 +307,7 @@ mt = mt.annotate_rows(
 
 
 
-############################################################
-# Count flip direction
-############################################################
-
-
-print("REF effect allele variants:")
+print("REF effect allele count")
 
 print(
 
@@ -351,7 +321,7 @@ print(
 
 
 
-print("ALT effect allele variants:")
+print("ALT effect allele count")
 
 print(
 
@@ -366,7 +336,7 @@ print(
 
 
 ############################################################
-# Calculate dosage
+# Dosage calculation
 ############################################################
 
 
@@ -398,7 +368,7 @@ dosage = hl.coalesce(
 
 
 ############################################################
-# Calculate participant PRS
+# PRS calculation
 ############################################################
 
 
@@ -408,13 +378,11 @@ print("Calculating PRS")
 
 mt = mt.annotate_cols(
 
-    chronotype_PRS =
+    chronotype_PRS = hl.agg.sum(
 
-        hl.agg.sum(
+        mt.prs_weight * dosage
 
-            mt.prs_weight * dosage
-
-        )
+    )
 
 )
 
@@ -425,7 +393,7 @@ mt = mt.annotate_cols(
 ############################################################
 
 
-print("Exporting PRS")
+print("Exporting")
 
 
 
@@ -447,12 +415,10 @@ mt.cols() \
 
 print("Finished")
 
-
-
 PYTHON
 
 
-    PYTHON
+    >>>
 
 
 
@@ -469,7 +435,7 @@ PYTHON
 
         cpu: cpu
 
-        memory: "~{mem} GB"
+        memory: memory_gb + " GB"
 
         disks: "local-disk 1500 SSD"
 
