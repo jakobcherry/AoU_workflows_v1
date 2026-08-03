@@ -100,9 +100,9 @@ PROJECT = "wb-happy-almond-4027"
 
 os.environ["PYSPARK_SUBMIT_ARGS"] = (
 
-    "--conf spark.driver.memory=120g "
+    "--conf spark.driver.memory=140g "
 
-    "--conf spark.executor.memory=120g "
+    "--conf spark.executor.memory=140g "
 
     "pyspark-shell"
 
@@ -116,6 +116,7 @@ os.environ["PYSPARK_SUBMIT_ARGS"] = (
 
 
 print("Starting Hail")
+
 
 
 hl.init(
@@ -136,12 +137,15 @@ print("Hail version:", hl.version())
 
 
 
+
+
 ############################################################
 # Load AoU MatrixTable
 ############################################################
 
 
 print("Loading AoU WGS MatrixTable")
+
 
 
 mt = hl.read_matrix_table(
@@ -167,7 +171,7 @@ print(mt.count_cols())
 
 
 ############################################################
-# Import PRS weights
+# Load PRS weights
 ############################################################
 
 
@@ -266,11 +270,12 @@ prs = prs.key_by(
 
 
 ############################################################
-# Match AoU variants to PRS
+# Match AoU variants to PRS variants
 ############################################################
 
 
 print("Filtering AoU variants")
+
 
 
 mt = mt.filter_rows(
@@ -294,11 +299,12 @@ print(mt.count_rows())
 
 
 ############################################################
-# Variant QC only on PRS variants
+# Variant QC on PRS variants only
 ############################################################
 
 
-print("Running variant QC on PRS variants")
+print("Running variant QC")
+
 
 
 mt = hl.variant_qc(mt)
@@ -308,11 +314,11 @@ mt = hl.variant_qc(mt)
 
 
 ############################################################
-# Add PRS information
+# Add PRS annotations
 ############################################################
 
 
-print("Adding PRS annotations")
+print("Adding PRS information")
 
 
 
@@ -332,11 +338,11 @@ mt = mt.annotate_rows(
 
 
 ############################################################
-# Determine allele orientation
+# Allele orientation
 ############################################################
 
 
-print("Checking allele orientation")
+print("Determining allele orientation")
 
 
 
@@ -425,7 +431,7 @@ print(
 
 
 ############################################################
-# Calculate dosage
+# Effect allele dosage
 ############################################################
 
 
@@ -434,7 +440,6 @@ print("Calculating dosage")
 
 
 dosage = hl.coalesce(
-
 
     hl.if_else(
 
@@ -457,7 +462,6 @@ dosage = hl.coalesce(
 
     )
 
-
 )
 
 
@@ -465,7 +469,7 @@ dosage = hl.coalesce(
 
 
 ############################################################
-# Calculate PRS
+# PRS calculation
 ############################################################
 
 
@@ -475,13 +479,11 @@ print("Calculating genome-wide PRS")
 
 mt = mt.annotate_cols(
 
-
     chronotype_PRS = hl.agg.sum(
 
         mt.prs_weight * dosage
 
     )
-
 
 )
 
@@ -508,13 +510,13 @@ mt.cols() \
 
 .export(
 
-    "~{output_prefix}"
+    "~{output_prefix}.bgz"
 
 )
 
 
 
-print("Finished")
+print("Finished successfully")
 
 
 
@@ -528,7 +530,7 @@ PYTHON
     output {
 
 
-        Array[File] prs_output = glob("*.bgz")
+        Array[File] prs_output = glob("~{output_prefix}.bgz*")
 
 
     }
@@ -547,7 +549,7 @@ PYTHON
         memory: "~{memory_gb} GB"
 
 
-        disks: "local-disk 1500 SSD"
+        disks: "local-disk 2000 SSD"
 
 
     }
