@@ -65,26 +65,22 @@ task CalculatePRS {
     }
 
 
-    command <<>
+    command <<<
 
-    set -euo pipefail
+        set -euo pipefail
 
 
-    python3 <<PYTHON
-
+        python3 <<'PYTHON'
 
 import hail as hl
-
 
 
 PROJECT = "wb-happy-almond-4027"
 
 
-
 ############################################################
 # Initialize Hail
 ############################################################
-
 
 hl.init(
 
@@ -99,18 +95,14 @@ hl.init(
 )
 
 
-
 print("Hail version:", hl.version())
-
 
 
 ############################################################
 # Load AoU MatrixTable
 ############################################################
 
-
 print("Loading AoU WGS")
-
 
 
 mt = hl.read_matrix_table(
@@ -120,36 +112,31 @@ mt = hl.read_matrix_table(
 )
 
 
-
 print("Variants:")
+
 print(mt.count_rows())
 
 
 print("Samples:")
-print(mt.count_cols())
 
+print(mt.count_cols())
 
 
 ############################################################
 # Variant QC
 ############################################################
 
-
 print("Running variant QC")
 
 
-
 mt = hl.variant_qc(mt)
-
 
 
 ############################################################
 # Load PRS weights
 ############################################################
 
-
 print("Loading PRS")
-
 
 
 prs = hl.import_table(
@@ -165,15 +152,16 @@ prs = hl.import_table(
 )
 
 
-
 print("PRS rows:")
-print(prs.count())
 
+print(prs.count())
 
 
 ############################################################
 # Create PRS keys
 ############################################################
+
+print("Creating PRS variant keys")
 
 
 prs = prs.annotate(
@@ -206,7 +194,6 @@ prs = prs.annotate(
 )
 
 
-
 prs = prs.select(
 
     "locus",
@@ -220,7 +207,6 @@ prs = prs.select(
 )
 
 
-
 prs = prs.key_by(
 
     "locus",
@@ -230,14 +216,11 @@ prs = prs.key_by(
 )
 
 
-
 ############################################################
-# Match variants
+# Match/filter to PRS variants
 ############################################################
 
-
-print("Filtering variants")
-
+print("Filtering AoU variants to PRS variants")
 
 
 mt = mt.filter_rows(
@@ -251,16 +234,14 @@ mt = mt.filter_rows(
 )
 
 
+print("Matched PRS variants:")
 
-print("Matched:")
 print(mt.count_rows())
-
 
 
 ############################################################
 # Add PRS information
 ############################################################
-
 
 mt = mt.annotate_rows(
 
@@ -271,13 +252,16 @@ mt = mt.annotate_rows(
 )
 
 
-
 ############################################################
 # Allele orientation
 ############################################################
 
+print("Determining allele orientation")
 
-flip = hl.case() \
+
+flip = (
+
+    hl.case()
 
     .when(
 
@@ -285,7 +269,7 @@ flip = hl.case() \
 
         True
 
-    ) \
+    )
 
     .when(
 
@@ -293,10 +277,11 @@ flip = hl.case() \
 
         False
 
-    ) \
+    )
 
     .or_missing()
 
+)
 
 
 mt = mt.annotate_rows(
@@ -306,8 +291,7 @@ mt = mt.annotate_rows(
 )
 
 
-
-print("REF effect allele count")
+print("PRS effect allele matches REF:")
 
 print(
 
@@ -320,8 +304,7 @@ print(
 )
 
 
-
-print("ALT effect allele count")
+print("PRS effect allele matches ALT:")
 
 print(
 
@@ -334,10 +317,24 @@ print(
 )
 
 
+print("Unresolved allele orientation:")
+
+print(
+
+    mt.aggregate_rows(
+
+        hl.agg.count_where(hl.is_missing(mt.flip))
+
+    )
+
+)
+
 
 ############################################################
 # Dosage calculation
 ############################################################
+
+print("Calculating effect-allele dosage")
 
 
 dosage = hl.coalesce(
@@ -366,14 +363,11 @@ dosage = hl.coalesce(
 )
 
 
-
 ############################################################
 # PRS calculation
 ############################################################
 
-
-print("Calculating PRS")
-
+print("Calculating genome-wide PRS")
 
 
 mt = mt.annotate_cols(
@@ -387,14 +381,11 @@ mt = mt.annotate_cols(
 )
 
 
-
 ############################################################
 # Export
 ############################################################
 
-
-print("Exporting")
-
+print("Exporting genome-wide PRS")
 
 
 mt.cols() \
@@ -412,11 +403,10 @@ mt.cols() \
     )
 
 
+print("Finished successfully")
 
-print("Finished")
 
 PYTHON
-
 
     >>>
 
