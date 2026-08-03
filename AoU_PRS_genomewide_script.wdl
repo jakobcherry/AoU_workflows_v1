@@ -1,6 +1,5 @@
 version 1.0
 
-
 workflow AoU_chronotype_PRS_genomewide {
 
     input {
@@ -20,19 +19,12 @@ workflow AoU_chronotype_PRS_genomewide {
 
     call CalculatePRS {
 
-        input {
-
-            genetic_mt = genetic_mt
-
-            prs_file = prs_file
-
-            output_prefix = output_prefix
-
-            cpu = cpu
-
+        input:
+            genetic_mt = genetic_mt,
+            prs_file = prs_file,
+            output_prefix = output_prefix,
+            cpu = cpu,
             memory_gb = memory_gb
-
-        }
 
     }
 
@@ -67,20 +59,17 @@ task CalculatePRS {
 
     command <<<
 
-        set -euo pipefail
+    set -euo pipefail
 
 
-        python3 <<'PYTHON'
+    python3 <<PYTHON
+
 
 import hail as hl
 
 
 PROJECT = "wb-happy-almond-4027"
 
-
-############################################################
-# Initialize Hail
-############################################################
 
 hl.init(
 
@@ -102,8 +91,7 @@ print("Hail version:", hl.version())
 # Load AoU MatrixTable
 ############################################################
 
-print("Loading AoU WGS")
-
+print("Loading AoU MatrixTable")
 
 mt = hl.read_matrix_table(
 
@@ -112,14 +100,15 @@ mt = hl.read_matrix_table(
 )
 
 
-print("Variants:")
+print("Total variants:")
 
 print(mt.count_rows())
 
 
-print("Samples:")
+print("Total samples:")
 
 print(mt.count_cols())
+
 
 
 ############################################################
@@ -128,16 +117,15 @@ print(mt.count_cols())
 
 print("Running variant QC")
 
-
 mt = hl.variant_qc(mt)
+
 
 
 ############################################################
 # Load PRS weights
 ############################################################
 
-print("Loading PRS")
-
+print("Loading PRS weights")
 
 prs = hl.import_table(
 
@@ -152,16 +140,17 @@ prs = hl.import_table(
 )
 
 
-print("PRS rows:")
+print("PRS variants:")
 
 print(prs.count())
+
 
 
 ############################################################
 # Create PRS keys
 ############################################################
 
-print("Creating PRS variant keys")
+print("Creating PRS keys")
 
 
 prs = prs.annotate(
@@ -182,7 +171,6 @@ prs = prs.annotate(
 
     ),
 
-
     alleles = [
 
         prs.noneffect_allele,
@@ -192,6 +180,7 @@ prs = prs.annotate(
     ]
 
 )
+
 
 
 prs = prs.select(
@@ -207,6 +196,7 @@ prs = prs.select(
 )
 
 
+
 prs = prs.key_by(
 
     "locus",
@@ -216,11 +206,12 @@ prs = prs.key_by(
 )
 
 
+
 ############################################################
-# Match/filter to PRS variants
+# Match AoU variants
 ############################################################
 
-print("Filtering AoU variants to PRS variants")
+print("Filtering to PRS variants")
 
 
 mt = mt.filter_rows(
@@ -234,13 +225,15 @@ mt = mt.filter_rows(
 )
 
 
-print("Matched PRS variants:")
+
+print("Matched variants:")
 
 print(mt.count_rows())
 
 
+
 ############################################################
-# Add PRS information
+# Add PRS annotations
 ############################################################
 
 mt = mt.annotate_rows(
@@ -252,8 +245,9 @@ mt = mt.annotate_rows(
 )
 
 
+
 ############################################################
-# Allele orientation
+# Determine allele orientation
 ############################################################
 
 print("Determining allele orientation")
@@ -284,6 +278,7 @@ flip = (
 )
 
 
+
 mt = mt.annotate_rows(
 
     flip = flip
@@ -291,7 +286,8 @@ mt = mt.annotate_rows(
 )
 
 
-print("PRS effect allele matches REF:")
+
+print("REF effect allele:")
 
 print(
 
@@ -304,7 +300,8 @@ print(
 )
 
 
-print("PRS effect allele matches ALT:")
+
+print("ALT effect allele:")
 
 print(
 
@@ -317,7 +314,8 @@ print(
 )
 
 
-print("Unresolved allele orientation:")
+
+print("Unresolved:")
 
 print(
 
@@ -330,11 +328,12 @@ print(
 )
 
 
+
 ############################################################
 # Dosage calculation
 ############################################################
 
-print("Calculating effect-allele dosage")
+print("Calculating dosage")
 
 
 dosage = hl.coalesce(
@@ -349,7 +348,6 @@ dosage = hl.coalesce(
 
     ),
 
-
     2 * hl.if_else(
 
         mt.flip,
@@ -363,11 +361,12 @@ dosage = hl.coalesce(
 )
 
 
+
 ############################################################
 # PRS calculation
 ############################################################
 
-print("Calculating genome-wide PRS")
+print("Calculating PRS")
 
 
 mt = mt.annotate_cols(
@@ -381,26 +380,27 @@ mt = mt.annotate_cols(
 )
 
 
+
 ############################################################
 # Export
 ############################################################
 
-print("Exporting genome-wide PRS")
+print("Exporting")
 
 
-mt.cols() \
+mt.cols()
 
-    .select(
+.select(
 
-        "chronotype_PRS"
+    "chronotype_PRS"
 
-    ) \
+)
 
-    .export(
+.export(
 
-        "~{output_prefix}"
+    "~{output_prefix}"
 
-    )
+)
 
 
 print("Finished successfully")
@@ -408,8 +408,8 @@ print("Finished successfully")
 
 PYTHON
 
-    >>>
 
+    >>>
 
 
     output {
