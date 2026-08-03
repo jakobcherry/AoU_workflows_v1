@@ -1,6 +1,8 @@
 version 1.0
 
+
 workflow AoU_chronotype_PRS_genomewide {
+
 
     input {
 
@@ -17,21 +19,31 @@ workflow AoU_chronotype_PRS_genomewide {
     }
 
 
+
     call CalculatePRS {
 
+
         input:
+
             genetic_mt = genetic_mt,
+
             prs_file = prs_file,
+
             output_prefix = output_prefix,
+
             cpu = cpu,
+
             memory_gb = memory_gb
 
     }
 
 
+
     output {
 
-        File prs_output = CalculatePRS.prs_output
+
+        Array[File] prs_output = CalculatePRS.prs_output
+
 
     }
 
@@ -39,10 +51,14 @@ workflow AoU_chronotype_PRS_genomewide {
 
 
 
+
+
 task CalculatePRS {
 
 
+
     input {
+
 
         String genetic_mt
 
@@ -57,7 +73,9 @@ task CalculatePRS {
     }
 
 
+
     command <<<
+
 
     set -euo pipefail
 
@@ -65,10 +83,39 @@ task CalculatePRS {
     python3 <<PYTHON
 
 
+import os
+
 import hail as hl
 
 
+
 PROJECT = "wb-happy-almond-4027"
+
+
+
+############################################################
+# Spark configuration
+############################################################
+
+
+os.environ["PYSPARK_SUBMIT_ARGS"] = (
+
+    "--conf spark.driver.memory=120g "
+
+    "--conf spark.executor.memory=120g "
+
+    "pyspark-shell"
+
+)
+
+
+
+############################################################
+# Initialize Hail
+############################################################
+
+
+print("Starting Hail")
 
 
 hl.init(
@@ -84,14 +131,18 @@ hl.init(
 )
 
 
+
 print("Hail version:", hl.version())
+
 
 
 ############################################################
 # Load AoU MatrixTable
 ############################################################
 
-print("Loading AoU MatrixTable")
+
+print("Loading AoU WGS MatrixTable")
+
 
 mt = hl.read_matrix_table(
 
@@ -100,9 +151,11 @@ mt = hl.read_matrix_table(
 )
 
 
+
 print("Total variants:")
 
 print(mt.count_rows())
+
 
 
 print("Total samples:")
@@ -111,21 +164,16 @@ print(mt.count_cols())
 
 
 
-############################################################
-# Variant QC
-############################################################
-
-print("Running variant QC")
-
-mt = hl.variant_qc(mt)
-
 
 
 ############################################################
-# Load PRS weights
+# Import PRS weights
 ############################################################
 
-print("Loading PRS weights")
+
+print("Loading PRS file")
+
+
 
 prs = hl.import_table(
 
@@ -140,9 +188,12 @@ prs = hl.import_table(
 )
 
 
+
 print("PRS variants:")
 
 print(prs.count())
+
+
 
 
 
@@ -150,10 +201,13 @@ print(prs.count())
 # Create PRS keys
 ############################################################
 
+
 print("Creating PRS keys")
 
 
+
 prs = prs.annotate(
+
 
     locus = hl.locus(
 
@@ -171,6 +225,7 @@ prs = prs.annotate(
 
     ),
 
+
     alleles = [
 
         prs.noneffect_allele,
@@ -178,6 +233,7 @@ prs = prs.annotate(
         prs.effect_allele
 
     ]
+
 
 )
 
@@ -207,11 +263,14 @@ prs = prs.key_by(
 
 
 
+
+
 ############################################################
-# Match AoU variants
+# Match AoU variants to PRS
 ############################################################
 
-print("Filtering to PRS variants")
+
+print("Filtering AoU variants")
 
 
 mt = mt.filter_rows(
@@ -232,17 +291,43 @@ print(mt.count_rows())
 
 
 
+
+
 ############################################################
-# Add PRS annotations
+# Variant QC only on PRS variants
 ############################################################
+
+
+print("Running variant QC on PRS variants")
+
+
+mt = hl.variant_qc(mt)
+
+
+
+
+
+############################################################
+# Add PRS information
+############################################################
+
+
+print("Adding PRS annotations")
+
+
 
 mt = mt.annotate_rows(
 
+
     prs_weight = prs[mt.row_key].weight,
+
 
     prs_effect_allele = prs[mt.row_key].effect_allele
 
+
 )
+
+
 
 
 
@@ -250,7 +335,9 @@ mt = mt.annotate_rows(
 # Determine allele orientation
 ############################################################
 
-print("Determining allele orientation")
+
+print("Checking allele orientation")
+
 
 
 flip = (
@@ -287,7 +374,9 @@ mt = mt.annotate_rows(
 
 
 
-print("REF effect allele:")
+
+
+print("REF matches:")
 
 print(
 
@@ -301,7 +390,7 @@ print(
 
 
 
-print("ALT effect allele:")
+print("ALT matches:")
 
 print(
 
@@ -321,7 +410,11 @@ print(
 
     mt.aggregate_rows(
 
-        hl.agg.count_where(hl.is_missing(mt.flip))
+        hl.agg.count_where(
+
+            hl.is_missing(mt.flip)
+
+        )
 
     )
 
@@ -329,14 +422,19 @@ print(
 
 
 
+
+
 ############################################################
-# Dosage calculation
+# Calculate dosage
 ############################################################
+
 
 print("Calculating dosage")
 
 
+
 dosage = hl.coalesce(
+
 
     hl.if_else(
 
@@ -348,6 +446,7 @@ dosage = hl.coalesce(
 
     ),
 
+
     2 * hl.if_else(
 
         mt.flip,
@@ -358,18 +457,24 @@ dosage = hl.coalesce(
 
     )
 
+
 )
 
 
 
+
+
 ############################################################
-# PRS calculation
+# Calculate PRS
 ############################################################
 
-print("Calculating PRS")
+
+print("Calculating genome-wide PRS")
+
 
 
 mt = mt.annotate_cols(
+
 
     chronotype_PRS = hl.agg.sum(
 
@@ -377,7 +482,10 @@ mt = mt.annotate_cols(
 
     )
 
+
 )
+
+
 
 
 
@@ -385,16 +493,18 @@ mt = mt.annotate_cols(
 # Export
 ############################################################
 
-print("Exporting")
+
+print("Exporting PRS")
 
 
-mt.cols()
+
+mt.cols() \
 
 .select(
 
     "chronotype_PRS"
 
-)
+) \
 
 .export(
 
@@ -403,7 +513,9 @@ mt.cols()
 )
 
 
-print("Finished successfully")
+
+print("Finished")
+
 
 
 PYTHON
@@ -412,23 +524,33 @@ PYTHON
     >>>
 
 
+
     output {
 
-        File prs_output = output_prefix
+
+        Array[File] prs_output = glob("*.bgz")
+
 
     }
+
 
 
     runtime {
 
+
         docker: "hailgenetics/hail:0.2.135"
+
 
         cpu: cpu
 
-        memory: memory_gb + " GB"
+
+        memory: "~{memory_gb} GB"
+
 
         disks: "local-disk 1500 SSD"
 
+
     }
+
 
 }
