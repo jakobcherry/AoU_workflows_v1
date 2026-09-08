@@ -95,7 +95,7 @@ import hail as hl
 
 
 
-PROJECT = "wb-happy-almond-4027"
+PROJECT = "wb-perky-onion-817"
 
 
 
@@ -122,7 +122,7 @@ hl.init(
 
     backend="spark",
 
-    tmp_dir="gs://dataproc-temp-wb-happy-almond-4027/hail_tmp",
+    tmp_dir="gs://dataproc-temp-wb-perky-onion-817/hail_tmp",
 
     gcs_requester_pays_configuration=PROJECT
 
