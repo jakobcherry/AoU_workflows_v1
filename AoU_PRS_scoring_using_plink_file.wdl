@@ -1,15 +1,11 @@
 version 1.0
 
-
 workflow AoU_chronotype_PRS {
 
     input {
 
         # ============================================================
-        # Existing AoU PLINK files
-        #
-        # These are the EXISTING AoU v9 PLINK files.
-        # Cromwell will localize them into each task.
+        # Existing AoU v9 PLINK BED files
         # ============================================================
 
         Array[File] bedfiles = [
@@ -37,6 +33,10 @@ workflow AoU_chronotype_PRS {
             "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr22.bed"
         ]
 
+        # ============================================================
+        # Existing AoU v9 PLINK BIM files
+        # ============================================================
+
         Array[File] bimfiles = [
             "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr1.bim",
             "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr2.bim",
@@ -61,6 +61,10 @@ workflow AoU_chronotype_PRS {
             "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr21.bim",
             "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr22.bim"
         ]
+
+        # ============================================================
+        # Existing AoU v9 PLINK FAM files
+        # ============================================================
 
         Array[File] famfiles = [
             "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr1.fam",
@@ -88,7 +92,10 @@ workflow AoU_chronotype_PRS {
         ]
 
         # ============================================================
-        # PRS weight file
+        # PRS WEIGHT FILE
+        #
+        # This remains a SINGLE File input so the WDL can be reused
+        # with any PRS weight file.
         # ============================================================
 
         File prs_file
@@ -101,49 +108,31 @@ workflow AoU_chronotype_PRS {
         Int mem = 120
     }
 
-
     # ================================================================
-    # CHROMOSOMES 1-22
+    # Scatter chromosomes 1-22
     # ================================================================
 
-    scatter (i in range(length(bedfiles))) {
+    scatter (i in range(22)) {
 
         call RunChromosomePRS {
-
             input:
-
-                chromosome =
-                    i + 1,
-
-                bedfile =
-                    bedfiles[i],
-
-                bimfile =
-                    bimfiles[i],
-
-                famfile =
-                    famfiles[i],
-
-                prs_file =
-                    prs_file,
-
-                cpu =
-                    cpu,
-
-                mem =
-                    mem
+                chromosome = i + 1,
+                bedfile = bedfiles[i],
+                bimfile = bimfiles[i],
+                famfile = famfiles[i],
+                prs_file = prs_file,
+                cpu = cpu,
+                mem = mem
         }
     }
 
+    # ================================================================
+    # Workflow outputs
+    # ================================================================
 
     output {
-
-        Array[File] sscore =
-            RunChromosomePRS.sscore
-
-        Array[File] log =
-            RunChromosomePRS.log
-
+        Array[File] sscore = RunChromosomePRS.sscore
+        Array[File] log = RunChromosomePRS.log
     }
 }
 
@@ -159,54 +148,58 @@ task RunChromosomePRS {
         Int chromosome
 
         File bedfile
-
         File bimfile
-
         File famfile
 
+        # Single reusable PRS weight file
         File prs_file
 
         Int cpu
-
         Int mem
     }
-
-
-    # =================================================================
-    # COMMAND
-    # =================================================================
 
     command <<<
 
         set -euo pipefail
 
-        # Save the complete task log as a persistent WDL output.
-        exec > "chr~{chromosome}.log" 2>&1
+        # ============================================================
+        # Persistent task log
+        # ============================================================
 
+        exec > "chr~{chromosome}.log" 2>&1
 
         echo ""
         echo "============================================================"
         echo "AoU CHRONOTYPE PRS"
         echo "============================================================"
         echo "Chromosome: ~{chromosome}"
-        echo ""
-        echo "Localized PLINK files:"
-        echo "~{bedfile}"
-        echo "~{bimfile}"
-        echo "~{famfile}"
-        echo ""
-        echo "PRS file:"
-        echo "~{prs_file}"
         echo "============================================================"
         echo ""
 
+        # ============================================================
+        # Localized input files
+        # ============================================================
 
-        # ============================================================
-        # Check staged files
-        # ============================================================
+        echo "Localized PLINK files:"
+        echo "BED: ~{bedfile}"
+        echo "BIM: ~{bimfile}"
+        echo "FAM: ~{famfile}"
+        echo ""
+
+        echo "PRS weight file:"
+        echo "~{prs_file}"
+        echo ""
+
+        echo "Working directory:"
+        pwd
+        echo ""
 
         echo "Staged files:"
-        find . -maxdepth 6 -type f
+        find . -maxdepth 6 -type f -ls
+
+        # ============================================================
+        # Check PLINK files
+        # ============================================================
 
         echo ""
         echo "Checking PLINK files..."
@@ -216,41 +209,54 @@ task RunChromosomePRS {
             ~{bimfile} \
             ~{famfile}
 
+        # ============================================================
+        # Check PRS file
+        # ============================================================
 
         echo ""
-        echo "Checking PRS file..."
+        echo "Checking PRS weight file..."
 
         ls -lh ~{prs_file}
 
-
         # ============================================================
-        # Check PLINK installation
+        # Check PLINK2
         # ============================================================
 
         echo ""
         echo "PLINK2 version:"
-
         plink2 --version
 
-
         # ============================================================
-        # Count variants
+        # Count chromosome variants
         # ============================================================
 
         echo ""
-        echo "PLINK variant count:"
+        echo "Chromosome ~{chromosome} variant count:"
 
         wc -l ~{bimfile}
 
-
         # ============================================================
-        # Run PRS scoring
+        # Inspect PRS weight file
         # ============================================================
 
         echo ""
-        echo "Starting PLINK2 scoring..."
-        echo ""
+        echo "PRS weight file type:"
+        file ~{prs_file}
 
+        echo ""
+        echo "First 5 lines of PRS weight file:"
+
+        zcat ~{prs_file} | head -5
+
+        # ============================================================
+        # Run PLINK2 scoring
+        # ============================================================
+
+        echo ""
+        echo "============================================================"
+        echo "Starting PLINK2 scoring"
+        echo "============================================================"
+        echo ""
 
         plink2 \
             --bfile ~{sub(bedfile, "\.bed$", "")} \
@@ -260,7 +266,6 @@ task RunChromosomePRS {
                 cols=+scoresums \
             --out chr~{chromosome}
 
-
         # ============================================================
         # Check output
         # ============================================================
@@ -269,36 +274,28 @@ task RunChromosomePRS {
         echo "============================================================"
         echo "CHR ~{chromosome} COMPLETE"
         echo "============================================================"
+        echo ""
 
         ls -lh chr~{chromosome}*
-
 
         echo ""
         echo "First 10 lines of score file:"
 
         head -10 chr~{chromosome}.sscore
 
+        echo ""
+        echo "============================================================"
+        echo "END CHROMOSOME ~{chromosome}"
+        echo "============================================================"
+
     >>>
-
-
-    # =================================================================
-    # OUTPUT
-    # =================================================================
 
     output {
 
-        File sscore =
-            "chr" + chromosome + ".sscore"
+        File sscore = "chr" + chromosome + ".sscore"
 
-        File log =
-            "chr" + chromosome + ".log"
-
+        File log = "chr" + chromosome + ".log"
     }
-
-
-    # =================================================================
-    # RUNTIME
-    # =================================================================
 
     runtime {
 
