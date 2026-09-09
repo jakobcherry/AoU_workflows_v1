@@ -1,28 +1,97 @@
 version 1.0
 
+
 workflow AoU_chronotype_PRS {
 
     input {
 
         # ============================================================
         # Existing AoU PLINK files
+        #
+        # These are the EXISTING AoU v9 PLINK files.
+        # Cromwell will localize them into each task.
         # ============================================================
 
-        String plink_bucket =
-            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold"
+        Array[File] bedfiles = [
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr1.bed",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr2.bed",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr3.bed",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr4.bed",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr5.bed",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr6.bed",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr7.bed",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr8.bed",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr9.bed",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr10.bed",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr11.bed",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr12.bed",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr13.bed",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr14.bed",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr15.bed",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr16.bed",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr17.bed",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr18.bed",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr19.bed",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr20.bed",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr21.bed",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr22.bed"
+        ]
+
+        Array[File] bimfiles = [
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr1.bim",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr2.bim",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr3.bim",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr4.bim",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr5.bim",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr6.bim",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr7.bim",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr8.bim",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr9.bim",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr10.bim",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr11.bim",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr12.bim",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr13.bim",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr14.bim",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr15.bim",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr16.bim",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr17.bim",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr18.bim",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr19.bim",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr20.bim",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr21.bim",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr22.bim"
+        ]
+
+        Array[File] famfiles = [
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr1.fam",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr2.fam",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr3.fam",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr4.fam",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr5.fam",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr6.fam",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr7.fam",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr8.fam",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr9.fam",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr10.fam",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr11.fam",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr12.fam",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr13.fam",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr14.fam",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr15.fam",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr16.fam",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr17.fam",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr18.fam",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr19.fam",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr20.fam",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr21.fam",
+            "gs://vwb-aou-datasets-controlled/v9/wgs/short_read/snpindel/acaf_threshold/plink_bed/acaf_threshold.chr22.fam"
+        ]
 
         # ============================================================
         # PRS weight file
         # ============================================================
 
         File prs_file
-
-        # ============================================================
-        # Output bucket
-        # ============================================================
-
-        String output_bucket =
-            "gs://cloned-all-circadian-patients-for-fitbit-and-prs-wb-perky-onion/Chronotype_even_PRS_v1"
 
         # ============================================================
         # Resources
@@ -37,23 +106,26 @@ workflow AoU_chronotype_PRS {
     # CHROMOSOMES 1-22
     # ================================================================
 
-    scatter (chromosome in [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22]) {
+    scatter (i in range(length(bedfiles))) {
 
         call RunChromosomePRS {
 
             input:
 
                 chromosome =
-                    chromosome,
+                    i + 1,
 
-                plink_prefix =
-                    plink_bucket + ".chr" + chromosome,
+                bedfile =
+                    bedfiles[i],
+
+                bimfile =
+                    bimfiles[i],
+
+                famfile =
+                    famfiles[i],
 
                 prs_file =
                     prs_file,
-
-                output_prefix =
-                    output_bucket + "/chr" + chromosome + "/chr" + chromosome,
 
                 cpu =
                     cpu,
@@ -69,6 +141,9 @@ workflow AoU_chronotype_PRS {
         Array[File] sscore =
             RunChromosomePRS.sscore
 
+        Array[File] log =
+            RunChromosomePRS.log
+
     }
 }
 
@@ -83,11 +158,13 @@ task RunChromosomePRS {
 
         Int chromosome
 
-        String plink_prefix
+        File bedfile
+
+        File bimfile
+
+        File famfile
 
         File prs_file
-
-        String output_prefix
 
         Int cpu
 
@@ -100,7 +177,12 @@ task RunChromosomePRS {
     # =================================================================
 
     command <<<
+
         set -euo pipefail
+
+        # Save the complete task log as a persistent WDL output.
+        exec > "chr~{chromosome}.log" 2>&1
+
 
         echo ""
         echo "============================================================"
@@ -108,40 +190,47 @@ task RunChromosomePRS {
         echo "============================================================"
         echo "Chromosome: ~{chromosome}"
         echo ""
-        echo "PLINK prefix:"
-        echo "~{plink_prefix}"
+        echo "Localized PLINK files:"
+        echo "~{bedfile}"
+        echo "~{bimfile}"
+        echo "~{famfile}"
         echo ""
         echo "PRS file:"
         echo "~{prs_file}"
-        echo ""
-        echo "Output:"
-        echo "~{output_prefix}"
         echo "============================================================"
         echo ""
+
+
+        # ============================================================
+        # Check staged files
+        # ============================================================
+
+        echo "Staged files:"
+        find . -maxdepth 6 -type f
+
+        echo ""
+        echo "Checking PLINK files..."
+
+        ls -lh \
+            ~{bedfile} \
+            ~{bimfile} \
+            ~{famfile}
+
+
+        echo ""
+        echo "Checking PRS file..."
+
+        ls -lh ~{prs_file}
 
 
         # ============================================================
         # Check PLINK installation
         # ============================================================
 
-        plink2 --version
-
-
-        # ============================================================
-        # Check input files
-        # ============================================================
-
-        echo "Checking PLINK files..."
-
-        ls -lh \
-            ~{plink_prefix}.bed \
-            ~{plink_prefix}.bim \
-            ~{plink_prefix}.fam
-
-
         echo ""
-        echo "Checking PRS file..."
-        ls -lh ~{prs_file}
+        echo "PLINK2 version:"
+
+        plink2 --version
 
 
         # ============================================================
@@ -151,7 +240,7 @@ task RunChromosomePRS {
         echo ""
         echo "PLINK variant count:"
 
-        wc -l ~{plink_prefix}.bim
+        wc -l ~{bimfile}
 
 
         # ============================================================
@@ -162,13 +251,14 @@ task RunChromosomePRS {
         echo "Starting PLINK2 scoring..."
         echo ""
 
+
         plink2 \
-            --bfile ~{plink_prefix} \
+            --bfile ~{sub(bedfile, "\.bed$", "")} \
             --score ~{prs_file} \
                 1 2 3 \
                 header-read \
                 cols=+scoresums \
-            --out ~{output_prefix}
+            --out chr~{chromosome}
 
 
         # ============================================================
@@ -180,12 +270,13 @@ task RunChromosomePRS {
         echo "CHR ~{chromosome} COMPLETE"
         echo "============================================================"
 
-        ls -lh ~{output_prefix}*
+        ls -lh chr~{chromosome}*
 
 
         echo ""
         echo "First 10 lines of score file:"
-        head -10 ~{output_prefix}.sscore
+
+        head -10 chr~{chromosome}.sscore
 
     >>>
 
@@ -197,7 +288,10 @@ task RunChromosomePRS {
     output {
 
         File sscore =
-            output_prefix + ".sscore"
+            "chr" + chromosome + ".sscore"
+
+        File log =
+            "chr" + chromosome + ".log"
 
     }
 
