@@ -1041,6 +1041,6 @@ task RunChromosomePRS {
             mem + " GB"
 
         disks:
-            "local-disk 750 SSD"
+            "local-disk 1875 SSD"
     }
 }
