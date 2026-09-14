@@ -468,7 +468,6 @@ task RunChromosomePRS {
                 BEGIN {
                     print "ID", "EFFECT_ALLELE", "WEIGHT" > score_file
 
-                    print "ID" > extract_file
 
                     print \
                         "chr", \
@@ -663,7 +662,6 @@ task RunChromosomePRS {
                 BEGIN {
                     print "ID", "EFFECT_ALLELE", "WEIGHT" > score_file
 
-                    print "ID" > extract_file
 
                     print \
                         "input_id", \
