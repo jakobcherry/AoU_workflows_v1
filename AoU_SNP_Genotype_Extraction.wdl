@@ -74,11 +74,10 @@ workflow AoU_SNP_Genotype_Extraction {
   ]
 
   Array[Int] selected_indices =
-    if (chromosome_selector == 0) {
+    if (chromosome_selector == 0) then
       range(23)
-    } else {
+    else
       [chromosome_selector - 1]
-    }
 
   scatter (idx in selected_indices) {
 
@@ -430,8 +429,8 @@ def is_symbolic_indel(a1, a2):
 
 def prepare():
 
-    variants = read_variants(sys.argv[2])
-    bim = read_bim(sys.argv[3])
+    variants = read_variants(sys.argv[3])
+    bim = read_bim(sys.argv[4])
 
     by_position = defaultdict(list)
 
@@ -483,36 +482,44 @@ def prepare():
             []
         )
 
+        # D/I are symbolic allele labels, not nucleotide sequences.
+        # Always retain them for later sequence-level harmonization.
+        # Do not attempt to extract their genotypes here.
+        if is_symbolic_indel(a1, a2):
+
+            if candidates:
+                row["match_status"] = "INDEL_REVIEW_POSITION_FOUND"
+                row["match_detail"] = (
+                    "Symbolic D/I allele. BIM position exists, "
+                    "but sequence-level harmonization is required. "
+                    "BIM candidates: "
+                    + ";".join(
+                        r["id"] + ":" + r["a1"] + "/" + r["a2"]
+                        for r in candidates
+                    )
+                )
+
+                if len(candidates) == 1:
+                    row["matched_variant_id"] = candidates[0]["id"]
+                    row["bim_a1"] = candidates[0]["a1"]
+                    row["bim_a2"] = candidates[0]["a2"]
+
+            else:
+                row["match_status"] = "INDEL_REVIEW_POSITION_NOT_FOUND"
+                row["match_detail"] = (
+                    "Symbolic D/I allele. No BIM record at this "
+                    "chromosome and position; sequence-level "
+                    "harmonization/review is required."
+                )
+
+            match_rows.append(row)
+            continue
+
         if not candidates:
             row["match_status"] = "NOT_FOUND"
             row["match_detail"] = (
                 "No BIM record at this chromosome and position"
             )
-            match_rows.append(row)
-            continue
-
-        # D/I labels are not nucleotide sequences.
-        # Keep them in the report without attempting an unsafe match.
-        if is_symbolic_indel(a1, a2):
-
-            row["match_status"] = "INDEL_REVIEW_POSITION_FOUND"
-
-            row["match_detail"] = (
-                "D/I allele label found. BIM position exists, "
-                "but the sequence representation must be "
-                "harmonized before genotype extraction. "
-                "BIM candidates: "
-                + ";".join(
-                    r["id"] + ":" + r["a1"] + "/" + r["a2"]
-                    for r in candidates
-                )
-            )
-
-            if len(candidates) == 1:
-                row["matched_variant_id"] = candidates[0]["id"]
-                row["bim_a1"] = candidates[0]["a1"]
-                row["bim_a2"] = candidates[0]["a2"]
-
             match_rows.append(row)
             continue
 
@@ -631,9 +638,7 @@ def prepare():
 def parse_vcf():
 
     with open("variant_match.tsv", "r", newline="", encoding="utf-8") as handle:
-        match_rows = list(
-            csv.DictReader(handle, delimiter="\t")
-        )
+        match_rows = list(csv.DictReader(handle, delimiter="\t"))
 
     fam_samples = read_fam(sys.argv[4])
 
@@ -642,34 +647,30 @@ def parse_vcf():
         if row["match_status"] == "MATCHED"
     ]
 
-    # Key by chromosome, position and unordered allele pair.
-    # This avoids relying on variant ID alone.
+    # One VCF record may correspond to multiple input rows.
+    # Keep all such rows instead of silently skipping duplicates.
     by_key = defaultdict(list)
 
     for row in matched:
-
         key = (
             norm_chr(row["chr"]),
             int(row["bp"]),
-            frozenset([
-                row["allele1"],
-                row["allele2"]
-            ])
+            frozenset([row["allele1"], row["allele2"]])
         )
-
         by_key[key].append(row)
 
-    # Initialize an output matrix with every FAM sample.
     matrix = {
-        sample: {}
+        sample: {
+            row["variant_column"]: "NA"
+            for row in matched
+        }
         for sample in fam_samples
     }
 
     qc = {}
 
     for row in matched:
-
-        qc[row["input_row"]] = {
+        qc[row["variant_column"]] = {
             "input_row": row["input_row"],
             "chr": row["chr"],
             "bp": row["bp"],
@@ -692,10 +693,9 @@ def parse_vcf():
             "n_diploid_calls": 0
         }
 
-        for sample in fam_samples:
-            matrix[sample][row["variant_column"]] = "NA"
-
     vcf_samples = []
+    seen_vcf_keys = set()
+    header_seen = False
 
     with open("plink_extract.vcf", "r", encoding="utf-8") as handle:
 
@@ -708,11 +708,13 @@ def parse_vcf():
 
                 header = line.rstrip("\n").split("\t")
                 vcf_samples = header[9:]
+                header_seen = True
 
                 if vcf_samples != fam_samples:
                     raise RuntimeError(
                         "VCF sample IDs/order do not match FAM IID order. "
-                        "Cannot safely assign genotypes to person_id. "
+                        "The workflow uses FAM IID as person_id and cannot "
+                        "safely assign genotypes unless these orders match. "
                         "Check PLINK VCF sample-ID behavior."
                     )
 
@@ -736,8 +738,9 @@ def parse_vcf():
             ref = norm_allele(fields[3])
             alt = norm_allele(fields[4])
 
-            # Only biallelic records are accepted here.
-            if "," in alt:
+            # This workflow intentionally handles biallelic SNP records.
+            # Multiallelic records are not silently interpreted as biallelic.
+            if "," in alt or alt in ("", ".") or ref in ("", "."):
                 continue
 
             key = (
@@ -748,95 +751,97 @@ def parse_vcf():
 
             candidates = by_key.get(key, [])
 
-            if len(candidates) != 1:
+            if not candidates:
                 continue
 
-            row = candidates[0]
-
-            # The input allele1 must be exactly REF or ALT.
-            if row["allele1"] == ref:
-                target_vcf_allele = "0"
-            elif row["allele1"] == alt:
-                target_vcf_allele = "1"
-            else:
-                qc[row["input_row"]]["match_status"] = (
-                    "VCF_ALLELE_MISMATCH"
-                )
+            # Do not count a repeated VCF record twice.
+            if key in seen_vcf_keys:
+                for row in candidates:
+                    qc[row["variant_column"]]["match_status"] = (
+                        "DUPLICATE_VCF_RECORD"
+                    )
                 continue
+
+            seen_vcf_keys.add(key)
 
             format_fields = fields[8].split(":")
-
             if "GT" not in format_fields:
-                qc[row["input_row"]]["match_status"] = (
-                    "VCF_GT_FIELD_MISSING"
-                )
+                for row in candidates:
+                    qc[row["variant_column"]]["match_status"] = (
+                        "VCF_GT_FIELD_MISSING"
+                    )
                 continue
 
             gt_index = format_fields.index("GT")
 
-            q = qc[row["input_row"]]
-            q["match_status"] = "EXTRACTED"
+            # The same VCF record can populate multiple input rows.
+            for row in candidates:
 
-            for sample, sample_field in zip(
-                vcf_samples,
-                fields[9:]
-            ):
+                if row["allele1"] == ref:
+                    target_vcf_allele = "0"
+                elif row["allele1"] == alt:
+                    target_vcf_allele = "1"
+                else:
+                    qc[row["variant_column"]]["match_status"] = (
+                        "VCF_ALLELE_MISMATCH"
+                    )
+                    continue
 
-                sample_parts = sample_field.split(":")
+                q = qc[row["variant_column"]]
+                q["match_status"] = "EXTRACTED"
 
-                gt = (
-                    sample_parts[gt_index]
-                    if gt_index < len(sample_parts)
-                    else "."
-                )
-
-                alleles = gt.replace("|", "/").split("/")
-                ploidy = len(alleles)
-
-                dosage = None
-
-                # Count copies of input allele1.
-                # Haploid calls naturally produce dosage 0 or 1.
-                # Diploid calls produce dosage 0, 1 or 2.
-                if (
-                    ploidy > 0
-                    and all(a in ("0", "1") for a in alleles)
-                ):
-
-                    dosage = sum(
-                        1
-                        for allele in alleles
-                        if allele == target_vcf_allele
+                if len(fields[9:]) != len(vcf_samples):
+                    raise RuntimeError(
+                        "VCF sample field count does not match VCF header."
                     )
 
-                if dosage is None:
-                    matrix[sample][row["variant_column"]] = "NA"
-                    q["n_missing"] += 1
+                for sample, sample_field in zip(vcf_samples, fields[9:]):
 
-                else:
-                    matrix[sample][row["variant_column"]] = dosage
+                    sample_parts = sample_field.split(":")
+                    gt = (
+                        sample_parts[gt_index]
+                        if gt_index < len(sample_parts)
+                        else "."
+                    )
 
-                    q["n_called"] += 1
-                    q["dosage_" + str(dosage)] += 1
+                    alleles = gt.replace("|", "/").split("/")
+                    ploidy = len(alleles)
 
-                    if ploidy == 1:
-                        q["n_haploid_calls"] += 1
-                    elif ploidy == 2:
-                        q["n_diploid_calls"] += 1
+                    # Preserve haploid and diploid calls, including chrX.
+                    # Calls with ploidy other than 1 or 2 are treated as
+                    # missing rather than assigned an unsupported dosage.
+                    dosage = None
 
-                q["n_samples"] += 1
+                    if (
+                        ploidy in (1, 2)
+                        and all(a in ("0", "1") for a in alleles)
+                    ):
+                        dosage = sum(
+                            1 for allele in alleles
+                            if allele == target_vcf_allele
+                        )
 
-    # Calculate missingness.
+                    if dosage is None:
+                        matrix[sample][row["variant_column"]] = "NA"
+                        q["n_missing"] += 1
+                    else:
+                        matrix[sample][row["variant_column"]] = dosage
+                        q["n_called"] += 1
+                        q["dosage_" + str(dosage)] += 1
+
+                        if ploidy == 1:
+                            q["n_haploid_calls"] += 1
+                        else:
+                            q["n_diploid_calls"] += 1
+
+                    q["n_samples"] += 1
+
+    if not header_seen:
+        raise RuntimeError("The PLINK VCF file did not contain a #CHROM header.")
+
     for q in qc.values():
-
         if q["n_samples"] > 0:
-            q["missing_rate"] = (
-                q["n_missing"] / q["n_samples"]
-            )
-
-    # --------------------------------------------------------
-    # WRITE WIDE PERSON-LEVEL MATRIX
-    # --------------------------------------------------------
+            q["missing_rate"] = q["n_missing"] / q["n_samples"]
 
     variant_columns = [
         row["variant_column"]
@@ -859,10 +864,8 @@ def parse_vcf():
         writer.writerow(["person_id"] + variant_columns)
 
         for sample in fam_samples:
-
             writer.writerow(
-                [sample]
-                + [
+                [sample] + [
                     matrix[sample].get(column, "NA")
                     for column in variant_columns
                 ]
@@ -871,7 +874,7 @@ def parse_vcf():
     write_tsv(
         "variant_qc.tsv",
         QC_FIELDS,
-        list(qc.values())
+        [qc[row["variant_column"]] for row in matched]
     )
 
     write_summary(
@@ -1016,7 +1019,7 @@ PYTHON
       "~{chromosome_label}" \
       prepare \
       "~{variant_file}" \
-      "${BFILE_PREFIX}.bim"
+      "~{bimfile}"
 
     # --------------------------------------------------------
     # 4. EXTRACT MATCHED VARIANTS
@@ -1038,7 +1041,7 @@ PYTHON
         "~{chromosome_label}" \
         parse \
         plink_extract.vcf \
-        "${BFILE_PREFIX}.fam"
+        "~{famfile}"
 
     else
 
@@ -1046,7 +1049,7 @@ PYTHON
         "~{chromosome_label}" \
         empty \
         unused \
-        "${BFILE_PREFIX}.fam"
+        "~{famfile}"
 
       echo "No extractable SNP variants on chromosome ~{chromosome_label}." \
         > plink_extract.log
