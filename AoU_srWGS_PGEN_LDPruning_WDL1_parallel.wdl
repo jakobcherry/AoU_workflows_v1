@@ -33,7 +33,6 @@ workflow AoU_srWGS_PGEN_LDPruning_Step1Prep_Parallel {
 
     Int window_kb = 200
     Float r2_threshold = 0.5
-    Boolean include_chrX = false
     String output_prefix = "AoU_srWGS_1pct_LDpruned"
 
     Int chromosome_cpu = 8
@@ -47,7 +46,7 @@ workflow AoU_srWGS_PGEN_LDPruning_Step1Prep_Parallel {
   }
 
 
-  Array[String] chromosomes = if (include_chrX) ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X"] else ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22"]
+  Array[String] chromosomes = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22"]
 
   scatter (chr in chromosomes) {
     call PruneExtractOneChromosome {
